@@ -1,0 +1,7 @@
+.env
+.idea
+proto/*.pb.go
+
+.DS_Store
+**/.DS_Store
+
