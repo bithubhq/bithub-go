@@ -1,4 +1,4 @@
-package coin
+package bithub
 
 import (
 	"errors"
@@ -8,23 +8,23 @@ import (
 
 var ErrUnknownCurrencyCode = errors.New("unknown currency code")
 
-type Type uint32
+type CoinType uint32
 
 const (
-	Bitcoin     Type = 0
-	Litecoin    Type = 1
-	Zcash       Type = 133
-	BitcoinCash Type = 145
-	Ethereum    Type = 60
+	Bitcoin     CoinType = 0
+	Litecoin    CoinType = 1
+	Zcash       CoinType = 133
+	BitcoinCash CoinType = 145
+	Ethereum    CoinType = 60
 
-	TestnetBitcoin     Type = 1000000
-	TestnetLitecoin    Type = 1000001
-	TestnetZcash       Type = 1000133
-	TestnetBitcoinCash Type = 1000145
-	TestnetEthereum    Type = 1000060
+	TestnetBitcoin     CoinType = 1000000
+	TestnetLitecoin    CoinType = 1000001
+	TestnetZcash       CoinType = 1000133
+	TestnetBitcoinCash CoinType = 1000145
+	TestnetEthereum    CoinType = 1000060
 )
 
-func (c Type) String() string {
+func (c CoinType) String() string {
 	switch c {
 	case Bitcoin:
 		return "Bitcoin"
@@ -51,7 +51,7 @@ func (c Type) String() string {
 	}
 }
 
-func (c Type) CurrencyCode() string {
+func (c CoinType) CurrencyCode() string {
 	switch c {
 	case Bitcoin:
 		return "BTC"
@@ -78,11 +78,11 @@ func (c Type) CurrencyCode() string {
 	}
 }
 
-func (c Type) ID() int {
+func (c CoinType) ID() int {
 	return int(c)
 }
 
-func ParseCurrencyCode(code string) (Type, error) {
+func ParseCurrencyCode(code string) (CoinType, error) {
 	switch strings.ToUpper(code) {
 	case "BTC":
 		return Bitcoin, nil
