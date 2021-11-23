@@ -18,9 +18,12 @@ type Client struct {
 }
 
 type Address struct {
-	Label   string `json:"label"`
-	Address string `json:"address"`
+	Label   string  `json:"label"`
+	Address string  `json:"address"`
+	Balance Balance `json:"balance"`
 }
+
+type Balance float64
 
 const (
 	LabelMaxLength = 128
@@ -158,6 +161,56 @@ func (c *Client) ListAddresses(params ListAddressesParams) ([]*Address, error) {
 	return response.Data, nil
 }
 
+type GetBalanceParams struct {
+	Coin *CoinType
+}
+
+func (p GetBalanceParams) validate() error {
+	if p.Coin == nil || p.Coin.String() == "" {
+		return ErrInvalidCoinType
+	}
+
+	return nil
+}
+
+func (c *Client) GetBalance(params GetBalanceParams) (Balance, error) {
+	if err := params.validate(); err != nil {
+		return 0, err
+	}
+
+	endpoint := c.getBalanceEndpoint(&params)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+c.APIKey)
+	req.Header.Add("X-Pin-Code", c.PINCode)
+
+	res, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		return 0, c.responseToError(res)
+	}
+
+	type getBalanceResponse struct {
+		Data struct {
+			Amount float64 `json:"amount"`
+		} `json:"data"`
+	}
+
+	var response getBalanceResponse
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+		return 0, err
+	}
+
+	return Balance(response.Data.Amount), nil
+}
+
 func (c *Client) createAddressEndpoint(params *CreateAddressParams) string {
 	wallet := params.Coin.CurrencyCode()
 
@@ -187,6 +240,12 @@ func (c *Client) listAddressesEndpoint(params *ListAddressesParams) string {
 		wallet,
 		"addresses",
 	)
+}
+
+func (c *Client) getBalanceEndpoint(params *GetBalanceParams) string {
+	wallet := params.Coin.CurrencyCode()
+
+	return fmt.Sprintf("%s/wallets/%s/%s", c.BaseURL, wallet, "balance")
 }
 
 func (c *Client) responseToError(res *http.Response) error {
