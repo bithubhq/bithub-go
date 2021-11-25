@@ -18,12 +18,15 @@ type Client struct {
 }
 
 type Address struct {
-	Label   string  `json:"label"`
-	Address string  `json:"address"`
-	Balance Balance `json:"balance"`
+	Label   string
+	Address string
+	Balance Balance
 }
 
-type Balance float64
+type Balance struct {
+	Amount    float64
+	AmountUSD float64
+}
 
 const (
 	LabelMaxLength = 128
@@ -100,9 +103,19 @@ func (c *Client) CreateAddress(params CreateAddressParams) (*Address, error) {
 		return nil, c.responseToError(res)
 	}
 
-	var address Address
-	if err := json.NewDecoder(res.Body).Decode(&address); err != nil {
+	type createAddressResponse struct {
+		Label   string `json:"label"`
+		Address string `json:"address"`
+	}
+
+	var response createAddressResponse
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
 		return nil, err
+	}
+
+	address := Address{
+		Label:   response.Label,
+		Address: response.Address,
 	}
 
 	return &address, nil
@@ -149,16 +162,35 @@ func (c *Client) ListAddresses(params ListAddressesParams) ([]*Address, error) {
 		return nil, c.responseToError(res)
 	}
 
-	type listResponse struct {
-		Data []*Address `json:"data"`
+	type listAddressesResponse struct {
+		Data []struct {
+			Label   string `json:"label"`
+			Address string `json:"address"`
+			Balance struct {
+				Amount    float64 `json:"amount"`
+				AmountUSD float64 `json:"amount_usd"`
+			} `json:"balance"`
+		} `json:"data"`
 	}
 
-	var response listResponse
+	var response listAddressesResponse
 	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
 		return nil, err
 	}
 
-	return response.Data, nil
+	var addresses []*Address
+	for _, r := range response.Data {
+		addresses = append(addresses, &Address{
+			Label:   r.Label,
+			Address: r.Address,
+			Balance: Balance{
+				Amount:    r.Balance.Amount,
+				AmountUSD: r.Balance.AmountUSD,
+			},
+		})
+	}
+
+	return addresses, nil
 }
 
 type GetBalanceParams struct {
@@ -173,15 +205,15 @@ func (p GetBalanceParams) validate() error {
 	return nil
 }
 
-func (c *Client) GetBalance(params GetBalanceParams) (Balance, error) {
+func (c *Client) GetBalance(params GetBalanceParams) (*Balance, error) {
 	if err := params.validate(); err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	endpoint := c.getBalanceEndpoint(&params)
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	req.Header.Add("Authorization", "Bearer "+c.APIKey)
@@ -189,26 +221,32 @@ func (c *Client) GetBalance(params GetBalanceParams) (Balance, error) {
 
 	res, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode >= 400 {
-		return 0, c.responseToError(res)
+		return nil, c.responseToError(res)
 	}
 
 	type getBalanceResponse struct {
 		Data struct {
-			Amount float64 `json:"amount"`
+			Amount    float64 `json:"amount"`
+			AmountUSD float64 `json:"amount_usd"`
 		} `json:"data"`
 	}
 
 	var response getBalanceResponse
 	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return Balance(response.Data.Amount), nil
+	balance := Balance{
+		Amount:    response.Data.Amount,
+		AmountUSD: response.Data.AmountUSD,
+	}
+
+	return &balance, nil
 }
 
 func (c *Client) createAddressEndpoint(params *CreateAddressParams) string {
