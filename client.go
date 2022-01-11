@@ -23,6 +23,10 @@ type Address struct {
 	Balance Balance
 }
 
+type Transaction struct {
+	TxID string
+}
+
 type Balance struct {
 	Amount    float64
 	AmountUSD float64
@@ -35,6 +39,8 @@ const (
 var (
 	ErrLabelTooLong    = errors.New("label cannot exceed 128 symbols")
 	ErrInvalidCoinType = errors.New("invalid coin type")
+	ErrInvalidAddress  = errors.New("invalid address value")
+	ErrInvalidAmount   = errors.New("invalid amount value")
 )
 
 type CreateAddressParams struct {
@@ -249,14 +255,91 @@ func (c *Client) GetBalance(params GetBalanceParams) (*Balance, error) {
 	return &balance, nil
 }
 
-func (c *Client) createAddressEndpoint(params *CreateAddressParams) string {
-	wallet := params.Coin.CurrencyCode()
+type SendParams struct {
+	Coin    *CoinType
+	Address string
+	Amount  float64
+}
 
-	return fmt.Sprintf("%s/wallets/%s/%s", c.BaseURL, wallet, "addresses")
+func (p SendParams) validate() error {
+	if p.Coin == nil || p.Coin.String() == "" {
+		return ErrInvalidCoinType
+	}
+
+	if strings.TrimSpace(p.Address) == "" {
+		return ErrInvalidAddress
+	}
+
+	if p.Amount <= 0 {
+		return ErrInvalidAmount
+	}
+
+	return nil
+}
+
+func (c *Client) Send(params SendParams) (*Transaction, error) {
+	if err := params.validate(); err != nil {
+		return nil, err
+	}
+
+	type sendRequest struct {
+		CurrencyCode string  `json:"currency_code"`
+		Address      string  `json:"address"`
+		Amount       float64 `json:"amount"`
+	}
+
+	payload := sendRequest{
+		CurrencyCode: params.Coin.CurrencyCode(),
+		Address:      params.Address,
+		Amount:       params.Amount,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint := c.sendEndpoint(&params)
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-type", "application/json")
+	req.Header.Add("Authorization", "Bearer "+c.APIKey)
+	req.Header.Add("X-Pin-Code", c.PINCode)
+
+	res, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode >= 400 {
+		return nil, c.responseToError(res)
+	}
+
+	type sendToAddressResponse struct {
+		TxID string `json:"txid"`
+	}
+
+	var response sendToAddressResponse
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+
+	transaction := Transaction{TxID: response.TxID}
+
+	return &transaction, nil
+}
+
+func (c *Client) createAddressEndpoint(params *CreateAddressParams) string {
+	currency := params.Coin.CurrencyCode()
+
+	return fmt.Sprintf("%s/wallets/%s/%s", c.BaseURL, currency, "addresses")
 }
 
 func (c *Client) listAddressesEndpoint(params *ListAddressesParams) string {
-	wallet := params.Coin.CurrencyCode()
+	currency := params.Coin.CurrencyCode()
 
 	var label string
 	if params.Label != nil {
@@ -267,23 +350,25 @@ func (c *Client) listAddressesEndpoint(params *ListAddressesParams) string {
 	if label != "" {
 		return fmt.Sprintf("%s/wallets/%s/%s?label=%s",
 			c.BaseURL,
-			wallet,
+			currency,
 			"addresses",
 			url.QueryEscape(label),
 		)
 	}
 
-	return fmt.Sprintf("%s/wallets/%s/%s",
-		c.BaseURL,
-		wallet,
-		"addresses",
-	)
+	return fmt.Sprintf("%s/wallets/%s/%s", c.BaseURL, currency, "addresses")
 }
 
 func (c *Client) getBalanceEndpoint(params *GetBalanceParams) string {
-	wallet := params.Coin.CurrencyCode()
+	currency := params.Coin.CurrencyCode()
 
-	return fmt.Sprintf("%s/wallets/%s/%s", c.BaseURL, wallet, "balance")
+	return fmt.Sprintf("%s/wallets/%s/%s", c.BaseURL, currency, "balance")
+}
+
+func (c *Client) sendEndpoint(params *SendParams) string {
+	currency := params.Coin.CurrencyCode()
+
+	return fmt.Sprintf("%s/wallets/%s/%s", c.BaseURL, currency, "send")
 }
 
 func (c *Client) responseToError(res *http.Response) error {
