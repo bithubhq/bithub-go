@@ -16,12 +16,6 @@ const (
 	Zcash       CoinType = 133
 	BitcoinCash CoinType = 145
 	Ethereum    CoinType = 60
-
-	TestnetBitcoin     CoinType = 1000000
-	TestnetLitecoin    CoinType = 1000001
-	TestnetZcash       CoinType = 1000133
-	TestnetBitcoinCash CoinType = 1000145
-	TestnetEthereum    CoinType = 1000060
 )
 
 func (c CoinType) String() string {
@@ -36,16 +30,6 @@ func (c CoinType) String() string {
 		return "Litecoin"
 	case Ethereum:
 		return "Ethereum"
-	case TestnetBitcoin:
-		return "Testnet Bitcoin"
-	case TestnetBitcoinCash:
-		return "Testnet Bitcoin Cash"
-	case TestnetZcash:
-		return "Testnet Zcash"
-	case TestnetLitecoin:
-		return "Testnet Litecoin"
-	case TestnetEthereum:
-		return "Testnet Ethereum"
 	default:
 		return ""
 	}
@@ -63,16 +47,6 @@ func (c CoinType) CurrencyCode() string {
 		return "LTC"
 	case Ethereum:
 		return "ETH"
-	case TestnetBitcoin:
-		return "TBTC"
-	case TestnetBitcoinCash:
-		return "TBCH"
-	case TestnetZcash:
-		return "TZEC"
-	case TestnetLitecoin:
-		return "TLTC"
-	case TestnetEthereum:
-		return "TETH"
 	default:
 		return ""
 	}
@@ -84,10 +58,16 @@ func (c CoinType) ID() int {
 
 func ParseCurrencyCode(code string) (CoinType, error) {
 	switch strings.ToUpper(code) {
-	case "BTC":
+	case Bitcoin.CurrencyCode():
 		return Bitcoin, nil
-	case "TBTC":
-		return TestnetBitcoin, nil
+	case BitcoinCash.CurrencyCode():
+		return BitcoinCash, nil
+	case Zcash.CurrencyCode():
+		return Zcash, nil
+	case Litecoin.CurrencyCode():
+		return Litecoin, nil
+	case Ethereum.CurrencyCode():
+		return Ethereum, nil
 	}
 	return math.MaxUint32, ErrUnknownCurrencyCode
 }
